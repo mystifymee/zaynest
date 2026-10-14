@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { InlineKeyboard, Bot } from "grammy";
+import { calculateCleaningPrice} from "./pricing.js"
 
 const token = process.env.BOT_TOKEN;
 
@@ -31,8 +32,19 @@ bot.callbackQuery("maintenance_cleaning", async (ctx) => {
 
 bot.callbackQuery("deep_cleaning", async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.reply("Вы выбрали генеральную уборку!");
+    const total = calculateCleaningPrice(60, 150);
+
+    await ctx.reply(
+        'Вы выбрали генеральную уборку!\n' +
+        `Площадь: ${60} м^2\n` +
+        `Предварительная стоимость: ${total} руб.`
+    );
+
 });
+
+
+
+
 
 
 bot.start();
