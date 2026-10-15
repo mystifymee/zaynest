@@ -11,8 +11,8 @@ import {
 
  
 interface SessionData {
-    awaitingArea: boolean;
     selectedService: "maintenance_cleaning" | "deep_cleaning" | null;
+    step: "idle" | "awaiting_area" | "awaiting_name";
 }
 
 
@@ -29,8 +29,9 @@ const bot = new Bot<MyContext>(token)
 
 bot.use(session({
     initial: (): SessionData => ({
-        awaitingArea: false,
-        selectedService: null
+        selectedService: null,
+        step: "idle"
+
     })
 }));
 
@@ -41,7 +42,7 @@ const keyboard = new InlineKeyboard()
 .text("Генеральная уборка", "deep_cleaning");
 
 bot.command("start", async(ctx) =>{
-    ctx.session.awaitingArea = false;
+    ctx.session.step = "idle";
     ctx.session.selectedService = null;
     await ctx.reply("Добро пожаловать в Zaynest!");
     await ctx.reply("Выберите услугу:", {
@@ -50,7 +51,7 @@ bot.command("start", async(ctx) =>{
 });
 
 bot.command("cancel", async (ctx) => {
-    ctx.session.awaitingArea = false;
+    ctx.session.step = "idle";
     ctx.session.selectedService = null;
 
     await ctx.reply("Оформление отменено. Выберите услугу", {
@@ -63,14 +64,14 @@ bot.command("cancel", async (ctx) => {
 
 
 bot.callbackQuery("maintenance_cleaning", async (ctx) => {
-    ctx.session.awaitingArea = true;
+    ctx.session.step = "awaiting_area";
     ctx.session.selectedService = "maintenance_cleaning";
     await ctx.answerCallbackQuery();
     await ctx.reply(`Укажите площадь квартиры`);
 });
 
 bot.callbackQuery("deep_cleaning", async (ctx) => {
-    ctx.session.awaitingArea = true;
+    ctx.session.step = "awaiting_area";
     ctx.session.selectedService = "deep_cleaning";
     await ctx.answerCallbackQuery();
 
@@ -79,7 +80,7 @@ bot.callbackQuery("deep_cleaning", async (ctx) => {
     )});
 
 bot.on("message:text", async(ctx) => {
-    if(!ctx.session.awaitingArea){
+    if(ctx.session.step !== "awaiting_area"){
         return
     }
 
@@ -105,11 +106,11 @@ bot.on("message:text", async(ctx) => {
         await ctx.reply("Введите корректную площадь.");
         return;
     }
-
-
+    
     
 
-    ctx.session.awaitingArea = false;
+    
+    ctx.session.step = "idle";
 
 
     await ctx.reply(`Предварительная стоимость: ${calculateCleaningPrice(area, price)}`)
