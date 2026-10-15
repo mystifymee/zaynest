@@ -41,11 +41,23 @@ const keyboard = new InlineKeyboard()
 .text("Генеральная уборка", "deep_cleaning");
 
 bot.command("start", async(ctx) =>{
+    ctx.session.awaitingArea = false;
+    ctx.session.selectedService = null;
     await ctx.reply("Добро пожаловать в Zaynest!");
     await ctx.reply("Выберите услугу:", {
         reply_markup: keyboard,
     });
 });
+
+bot.command("cancel", async (ctx) => {
+    ctx.session.awaitingArea = false;
+    ctx.session.selectedService = null;
+
+    await ctx.reply("Оформление отменено. Выберите услугу", {
+        reply_markup: keyboard,
+    });
+});
+
 
 
 
