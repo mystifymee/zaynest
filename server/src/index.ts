@@ -12,6 +12,7 @@ import {
  
 interface SessionData {
     awaitingArea: boolean;
+    selectedService: "maintenance_cleaning" | "deep_cleaning" | null;
 }
 
 
@@ -28,7 +29,8 @@ const bot = new Bot<MyContext>(token)
 
 bot.use(session({
     initial: (): SessionData => ({
-        awaitingArea: false
+        awaitingArea: false,
+        selectedService: null
     })
 }));
 
@@ -49,12 +51,15 @@ bot.command("start", async(ctx) =>{
 
 
 bot.callbackQuery("maintenance_cleaning", async (ctx) => {
+    ctx.session.awaitingArea = true;
+    ctx.session.selectedService = "maintenance_cleaning";
     await ctx.answerCallbackQuery();
-    await ctx.reply("Вы выбрали поддерживающую уборку!");
+    await ctx.reply(`Укажите площадь квартиры`);
 });
 
 bot.callbackQuery("deep_cleaning", async (ctx) => {
     ctx.session.awaitingArea = true;
+    ctx.session.selectedService = "deep_cleaning";
     await ctx.answerCallbackQuery();
 
     await ctx.reply(
@@ -66,17 +71,36 @@ bot.on("message:text", async(ctx) => {
         return
     }
 
+
+    const service = ctx.session.selectedService
+
+    if(service === null){
+        await ctx.reply("Нужно выбрать услугу");
+        return;
+    }
+
+    let price: number;
+    if(service === "maintenance_cleaning") {
+        price = 80;
+    } else {
+        price = 150;
+    }
+
     const area =  Number(ctx.message.text);
+
 
     if(!Number.isInteger(area) || area <=0 || area > 1000) {
         await ctx.reply("Введите корректную площадь.");
         return;
     }
 
+
+    
+
     ctx.session.awaitingArea = false;
 
 
-    await ctx.reply(`Предварительная стоимость: ${calculateCleaningPrice(area, 150)}`)
+    await ctx.reply(`Предварительная стоимость: ${calculateCleaningPrice(area, price)}`)
 });
 
 
