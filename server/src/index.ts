@@ -1,14 +1,16 @@
 import "dotenv/config";
-import { 
+import {
     InlineKeyboard,
     Bot,
     session,
     Keyboard
  } from "grammy";
- 
+
  import type { Context, SessionFlavor } from "grammy";
 
  import { calculateCleaningPrice} from "./pricing.js"
+
+ import { prisma } from "./db.js";
 
 interface SessionData {
     selectedService: "maintenance_cleaning" | "deep_cleaning" | null;
@@ -94,14 +96,65 @@ bot.command("cancel", async (ctx) => {
 
 bot.callbackQuery("signUpCleaning", async (ctx) => {
     const clickedMessageId = ctx.callbackQuery.message?.message_id;
+
     if(ctx.session.step !== "awaiting_confirmation" || clickedMessageId !== ctx.session.confirmationMessageId) {
         await ctx.answerCallbackQuery()
         return
     };
+
     await ctx.answerCallbackQuery();
-    await ctx.reply(`Данные заявки подтверждены. Сохранение заявки будет подключено позже.`);
-    ctx.session.step = "idle";
-})
+    const { selectedService, area, name, phone, desiredDate } = ctx.session;
+
+    if(!selectedService || area === null || !name || !phone || !desiredDate) {
+        await ctx.reply("Ошибка: не все данные заявки заполнены.");
+        return;
+    };
+
+    const [datePart, timePart] = desiredDate.split(" ");
+
+    if(!datePart || !timePart) {
+        await ctx.reply("Ошибка: некорректная дата уборки.");
+        return;
+    }
+
+    const [day, month, year] = datePart.split(".");
+    const bookingDate = new Date(`${year}-${month}-${day}T${timePart}:00+03:00`);
+
+    if(Number.isNaN(bookingDate.getTime())) {
+        await ctx.reply("Ошибка: некорректная дата уборки.");
+        return;
+    }
+
+    const totalPrice = calculateCleaningPrice(area, services[selectedService].price);
+
+    let orderId: number;
+
+    try {
+
+        const order = await prisma.order.create({
+            data: {
+                service: selectedService,
+                area: area,
+                totalPrice: totalPrice,
+                customerName: name,
+                phone: phone,
+                desiredDate: bookingDate
+            }
+        });
+
+        orderId = order.id;
+
+
+    }   catch(error) {
+            console.error("Не удалось сохранить заявку")
+            await ctx.reply(`Не удалось сохранить заявку! Попробуйте еще раз`);
+            return;
+    }
+
+    resetSession(ctx);
+
+    await ctx.reply(`Заявка №${orderId} успешно сохранена!`);
+});
 
 bot.callbackQuery("maintenance_cleaning", async (ctx) => {
     ctx.session.step = "awaiting_area";
@@ -121,7 +174,7 @@ bot.callbackQuery("deep_cleaning", async (ctx) => {
 
 bot.callbackQuery("cancelCleaning", async (ctx) => {
     const clickedMessageId = ctx.callbackQuery.message?.message_id;
-    if(ctx.session.step !== "awaiting_confirmation" || clickedMessageId !== ctx.session.confirmationMessageId) { 
+    if(ctx.session.step !== "awaiting_confirmation" || clickedMessageId !== ctx.session.confirmationMessageId) {
         await ctx.answerCallbackQuery();
         return;
     }
@@ -129,8 +182,8 @@ bot.callbackQuery("cancelCleaning", async (ctx) => {
     await ctx.answerCallbackQuery();
 
     resetSession(ctx);
-    
-   
+
+
 
     await ctx.reply("Заявка отменена. Выберите услугу", {
         reply_markup: keyboard
@@ -240,7 +293,7 @@ bot.on("message:text", async(ctx) => {
 
         await ctx.reply(`Желаемая дата уборки сохранена: ${date}`);
 
-        
+
 
 
         const { selectedService: service, area, name, phone } = ctx.session;
@@ -256,7 +309,7 @@ bot.on("message:text", async(ctx) => {
 
         const total = calculateCleaningPrice(area, serviceInfo.price);
 
-        
+
 
         const message = await ctx.reply(
             `Проверьте данные заявки:\n` +
@@ -275,7 +328,7 @@ bot.on("message:text", async(ctx) => {
         return;
     }
 
-    
+
 });
 
 
@@ -302,7 +355,7 @@ bot.on("message:contact", async (ctx) => {
 
     }
 
-    
+
 })
 
 
