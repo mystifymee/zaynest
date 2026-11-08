@@ -12,7 +12,7 @@ import {
 
 interface SessionData {
     selectedService: "maintenance_cleaning" | "deep_cleaning" | null;
-    step: "idle" | "awaiting_area" | "awaiting_name" | "awaiting_phone" | "awaiting_date";
+    step: "idle" | "awaiting_area" | "awaiting_name" | "awaiting_phone" | "awaiting_date" | "awaiting_confirmation";
     area: number | null;
     name: string | null;
     phone: string | null;
@@ -23,6 +23,11 @@ const contactKeyboard = new Keyboard()
     .requestContact("Отправить телефон")
     .resized()
     .oneTime();
+
+const confirmationKeyboard = new InlineKeyboard()
+    .text("Отправить заявку", "signUpCleaning")
+    .row()
+    .text("Отменить", "cancelCleaning");
 
  const token = process.env.BOT_TOKEN;
 
@@ -48,28 +53,52 @@ const keyboard = new InlineKeyboard()
 .row()
 .text("Генеральная уборка", "deep_cleaning");
 
-bot.command("start", async(ctx) =>{
+
+const services =  {
+    maintenance_cleaning: {
+        name: "Поддерживающая уборка",
+        price: 80
+    },
+    deep_cleaning: {
+        name: "Генеральная уборка",
+        price: 150
+    }
+};
+
+
+function resetSession(ctx: MyContext) {
     ctx.session.step = "idle";
     ctx.session.selectedService = null;
     ctx.session.area = null;
     ctx.session.name = null;
     ctx.session.phone = null;
     ctx.session.desiredDate = null;
+}
+
+
+bot.command("start", async(ctx) =>{
+    resetSession(ctx);
     await ctx.reply("Добро пожаловать в Zaynest!");
     await ctx.reply("Выберите услугу:", {reply_markup: keyboard,});
 });
 
 bot.command("cancel", async (ctx) => {
-    ctx.session.step = "idle";
-    ctx.session.selectedService = null;
-    ctx.session.area = null;
-    ctx.session.name = null;
-    ctx.session.phone = null;
-    ctx.session.desiredDate = null;
+    resetSession(ctx);
 
     await ctx.reply("Оформление отменено. Выберите услугу", {
         reply_markup: keyboard,});
 });
+
+
+bot.callbackQuery("signUpCleaning", async (ctx) => {
+    if(ctx.session.step !== "awaiting_confirmation") {
+        await ctx.answerCallbackQuery()
+        return
+    };
+    await ctx.answerCallbackQuery();
+    await ctx.reply(`Данные заявки подтверждены. Сохранение заявки будет подключено позже.`);
+    ctx.session.step = "idle";
+})
 
 bot.callbackQuery("maintenance_cleaning", async (ctx) => {
     ctx.session.step = "awaiting_area";
@@ -86,15 +115,33 @@ bot.callbackQuery("deep_cleaning", async (ctx) => {
 
     await ctx.reply('Укажите площадь квартиры\n')});
 
+
+bot.callbackQuery("cancelCleaning", async (ctx) => {
+    if(ctx.session.step !== "awaiting_confirmation") { 
+        await ctx.answerCallbackQuery();
+        return;
+    }
+
+    await ctx.answerCallbackQuery();
+
+    resetSession(ctx);
+    
+   
+
+    await ctx.reply("Заявка отменена. Выберите услугу", {
+        reply_markup: keyboard
+    });
+});
+
 bot.on("message:text", async(ctx) => {
     if(ctx.session.step === "awaiting_area"){
         const service = ctx.session.selectedService
 
-        if(service === null){await ctx.reply("Нужно выбрать услугу");return;}
+        if(service === null){await ctx.reply("Нужно выбрать услугу");return;};
 
-        let price: number;
+        const selectedService = services[service];
 
-        if(service === "maintenance_cleaning") {price = 80;} else {price = 150;}
+
         const area =  Number(ctx.message.text);
 
         if(!Number.isInteger(area) || area <=0 || area > 1000) {
@@ -103,7 +150,7 @@ bot.on("message:text", async(ctx) => {
         ctx.session.area = area;
         ctx.session.step = "awaiting_name"
 
-        await ctx.reply(`Предварительная стоимость: ${calculateCleaningPrice(area, price)}`)
+        await ctx.reply(`Предварительная стоимость: ${calculateCleaningPrice(area, selectedService.price)}`)
         await ctx.reply("Как вас зовут?");
         return
     }
@@ -189,8 +236,36 @@ bot.on("message:text", async(ctx) => {
 
         await ctx.reply(`Желаемая дата уборки сохранена: ${date}`);
 
-        ctx.session.step = "idle";
         
+
+
+        const { selectedService: service, area, name, phone } = ctx.session;
+
+        if(service === null || area === null || name === null || phone === null){
+            await ctx.reply("Не все данные заполнены");
+            return
+        }
+
+        ctx.session.step = "awaiting_confirmation";
+
+        const serviceInfo = services[service];
+
+        const total = calculateCleaningPrice(area, serviceInfo.price);
+
+        
+
+        await ctx.reply(
+            `Проверьте данные заявки:\n` +
+            `Услуга: ${serviceInfo.name}\n` +
+            `Площадь: ${area}\n` +
+            `Предварительная стоимость: ${total} ₽\n` +
+            `Имя: ${name}\n` +
+            `Телефон: ${phone}\n` +
+            `Желаемая дата: ${date}`, {
+                reply_markup: confirmationKeyboard
+            }
+        );
+
         return;
     }
 
