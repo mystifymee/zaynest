@@ -17,6 +17,7 @@ interface SessionData {
     name: string | null;
     phone: string | null;
     desiredDate: string | null;
+    confirmationMessageId: number | null;
 }
 
 const contactKeyboard = new Keyboard()
@@ -43,8 +44,8 @@ bot.use(session({
         area: null,
         name: null,
         phone: null,
-        desiredDate: null
-
+        desiredDate: null,
+        confirmationMessageId: null
     })
 }));
 
@@ -73,6 +74,7 @@ function resetSession(ctx: MyContext) {
     ctx.session.name = null;
     ctx.session.phone = null;
     ctx.session.desiredDate = null;
+    ctx.session.confirmationMessageId = null;
 }
 
 
@@ -91,7 +93,8 @@ bot.command("cancel", async (ctx) => {
 
 
 bot.callbackQuery("signUpCleaning", async (ctx) => {
-    if(ctx.session.step !== "awaiting_confirmation") {
+    const clickedMessageId = ctx.callbackQuery.message?.message_id;
+    if(ctx.session.step !== "awaiting_confirmation" || clickedMessageId !== ctx.session.confirmationMessageId) {
         await ctx.answerCallbackQuery()
         return
     };
@@ -117,7 +120,8 @@ bot.callbackQuery("deep_cleaning", async (ctx) => {
 
 
 bot.callbackQuery("cancelCleaning", async (ctx) => {
-    if(ctx.session.step !== "awaiting_confirmation") { 
+    const clickedMessageId = ctx.callbackQuery.message?.message_id;
+    if(ctx.session.step !== "awaiting_confirmation" || clickedMessageId !== ctx.session.confirmationMessageId) { 
         await ctx.answerCallbackQuery();
         return;
     }
@@ -254,7 +258,7 @@ bot.on("message:text", async(ctx) => {
 
         
 
-        await ctx.reply(
+        const message = await ctx.reply(
             `Проверьте данные заявки:\n` +
             `Услуга: ${serviceInfo.name}\n` +
             `Площадь: ${area}\n` +
@@ -265,6 +269,8 @@ bot.on("message:text", async(ctx) => {
                 reply_markup: confirmationKeyboard
             }
         );
+
+        ctx.session.confirmationMessageId = message.message_id;
 
         return;
     }
