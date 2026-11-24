@@ -20,6 +20,21 @@ model Order {
   customerName String
   phone String
   desiredDate DateTime
-  status String  @default("NEW")
+  status OrderStatus @default(NEW)
+  telegramUserId BigInt?
+  confirmationKey String? @unique @db.Uuid
   createdAt DateTime @default(now())
+}
+
+enum OrderStatus {
+  NEW
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
+model BookingDraft {
+  telegramUserId BigInt @id
+  data Json
+  confirmationKey String? @unique @db.Uuid
 }

@@ -1,0 +1,62 @@
+x-logging: &bounded-logs
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:17-alpine
+    logging: *bounded-logs
+    environment:
+      POSTGRES_USER: zaynest
+      POSTGRES_DB: zaynest
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "zaynest", "-d", "zaynest"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    logging: *bounded-logs
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    build:
+      context: ./server
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://zaynest:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zaynest
+    depends_on:
+      db:
+        condition: service_healthy
+
+  bot:
+    container_name: zaynest-prod-bot
+    init: true
+    logging: *bounded-logs
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    build:
+      context: ./server
+      target: runtime
+    environment:
+      DATABASE_URL: postgresql://zaynest:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/zaynest
+      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN}
+      ADMIN_TELEGRAM_ID: ${ADMIN_TELEGRAM_ID:?Set ADMIN_TELEGRAM_ID}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+volumes:
+  postgres_data:

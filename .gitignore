@@ -1,5 +1,14 @@
 node_modules/
+dist/
 .env
 .env.*
 !.env.example
-dist/
+.DS_Store
+*.log
+*.dump
+*.backup
+*.sql.gz
+/zaynest-*.sql
+/backups/
+pgdata/
+server/src/check-db.ts
